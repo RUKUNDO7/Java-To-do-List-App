@@ -10,4 +10,5 @@ public interface TodoRepository extends JpaRepository<Todo, Long> {
     Optional<Todo> findByTitle(String title);
     boolean existsByTitle(String title);
     void deleteByTitle(String title);
+    java.util.List<Todo> findByStatus(boolean status);
 }
