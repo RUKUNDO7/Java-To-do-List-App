@@ -23,6 +23,7 @@
 
   <properties>
     <java.version>17</java.version> <!-- JDK version -->
+    <frontend.skip>false</frontend.skip>
   </properties>
 
   <dependencies>
@@ -66,6 +67,46 @@
 
   <build>
     <plugins>
+      <!-- Build React frontend into src/main/resources/static -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.2.0</version>
+        <executions>
+          <execution>
+            <id>npm-install</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <skip>${frontend.skip}</skip>
+              <workingDirectory>${project.basedir}/frontend</workingDirectory>
+              <executable>npm</executable>
+              <arguments>
+                <argument>install</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>npm-build</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>exec</goal>
+            </goals>
+            <configuration>
+              <skip>${frontend.skip}</skip>
+              <workingDirectory>${project.basedir}/frontend</workingDirectory>
+              <executable>npm</executable>
+              <arguments>
+                <argument>run</argument>
+                <argument>build</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
       <!-- Spring Boot plugin to run the app -->
       <plugin>
         <groupId>org.springframework.boot</groupId>
