@@ -19,6 +19,10 @@ public class TodoService {
         return todoRepository.findAll();
     }
 
+    public List<Todo> getTodosByStatus(boolean status) {
+        return todoRepository.findByStatus(status);
+    }
+
     public Todo getTodoById(Long id) {
         return todoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Task not found"));
