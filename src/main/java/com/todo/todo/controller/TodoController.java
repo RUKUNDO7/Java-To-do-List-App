@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/todos")
+@RequestMapping({"/todos", "/todos/"})
 @CrossOrigin
 public class TodoController {
 
@@ -20,6 +20,11 @@ public class TodoController {
     @GetMapping
     public List<Todo> getAllTodos() {
         return todoService.getAllTodos();
+    }
+
+    @GetMapping("/status/{status}")
+    public List<Todo> getTodosByStatus(@PathVariable boolean status) {
+        return todoService.getTodosByStatus(status);
     }
 
     @GetMapping("/{id}")
