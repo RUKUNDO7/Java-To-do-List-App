@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/todos")
+@RequestMapping("/todos")
 @CrossOrigin
 public class TodoController {
 
@@ -22,6 +22,16 @@ public class TodoController {
         return todoService.getAllTodos();
     }
 
+    @GetMapping("/{id}")
+    public Todo getTodoById(@PathVariable Long id) {
+        return todoService.getTodoById(id);
+    }
+
+    @GetMapping("/title/{title}")
+    public Todo getTodoByTitle(@PathVariable String title) {
+        return todoService.getTodoByTitle(title);
+    }
+
     @PostMapping
     public Todo createTodo(@RequestBody Todo todo) {
         return todoService.createTodo(todo);
@@ -32,8 +42,18 @@ public class TodoController {
         return todoService.updateTodo(id, todo);
     }
 
+    @PutMapping("/title/{title}")
+    public Todo updateTodoByTitle(@PathVariable String title, @RequestBody Todo todo) {
+        return todoService.updateTodoByTitle(title, todo);
+    }
+
     @DeleteMapping("/{id}")
     public void deleteTodo(@PathVariable Long id) {
         todoService.deleteTodo(id);
+    }
+
+    @DeleteMapping("/title/{title}")
+    public void deleteTodoByTitle(@PathVariable String title) {
+        todoService.deleteTodoByTitle(title);
     }
 }
