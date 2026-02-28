@@ -1,6 +1,7 @@
 const request = async (url, options = {}) => {
   const response = await fetch(url, {
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     ...options,
   });
 
@@ -19,6 +20,22 @@ const request = async (url, options = {}) => {
 };
 
 export const api = {
+  signup: (payload) =>
+    request("/auth/signup", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  login: (payload) =>
+    request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  me: () => request("/auth/me"),
+  logout: () =>
+    request("/auth/logout", {
+      method: "POST",
+    }),
+  dashboard: () => request("/dashboard"),
   list: () => request("/todos"),
   create: (payload) =>
     request("/todos", {
