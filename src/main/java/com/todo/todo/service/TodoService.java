@@ -1,8 +1,11 @@
 package com.todo.todo.service;
 
+import com.todo.todo.model.AppUser;
 import com.todo.todo.model.Todo;
 import com.todo.todo.repository.TodoRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -15,43 +18,47 @@ public class TodoService {
         this.todoRepository = todoRepository;
     }
 
-    public List<Todo> getAllTodos() {
-        return todoRepository.findAll();
+    public List<Todo> getAllTodosForUser(AppUser user) {
+        return todoRepository.findByOwnerId(user.getId());
     }
 
-    public List<Todo> getTodosByStatus(boolean status) {
-        return todoRepository.findByStatus(status);
+    public List<Todo> getTodosByStatusForUser(AppUser user, boolean status) {
+        return todoRepository.findByOwnerIdAndStatus(user.getId(), status);
     }
 
-    public Todo getTodoById(Long id) {
-        return todoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
+    public Todo getTodoByIdForUser(AppUser user, Long id) {
+        return todoRepository.findByOwnerIdAndId(user.getId(), id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
     }
 
-    public Todo getTodoByTitle(String title) {
-        return todoRepository.findByTitle(title)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
+    public Todo getTodoByTitleForUser(AppUser user, String title) {
+        return todoRepository.findByOwnerIdAndTitle(user.getId(), title)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
     }
 
-    public Todo createTodo(Todo todo) {
+    public Todo createTodoForUser(AppUser user, Todo todo) {
+        if (todoRepository.existsByOwnerIdAndTitle(user.getId(), todo.getTitle())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Task with this title already exists");
+        }
+        todo.setOwner(user);
         return todoRepository.save(todo);
     }
 
-    public void deleteTodo(Long id) {
+    public void deleteTodoForUser(AppUser user, Long id) {
+        getTodoByIdForUser(user, id);
         todoRepository.deleteById(id);
     }
 
-    public void deleteTodoByTitle(String title) {
-        if (!todoRepository.existsByTitle(title)) {
-            throw new RuntimeException("Task not found");
+    public void deleteTodoByTitleForUser(AppUser user, String title) {
+        if (!todoRepository.existsByOwnerIdAndTitle(user.getId(), title)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found");
         }
 
-        todoRepository.deleteByTitle(title);
+        todoRepository.deleteByOwnerIdAndTitle(user.getId(), title);
     }
 
-    public Todo updateTodo(Long id, Todo updateTodo) {
-        Todo todo = todoRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
+    public Todo updateTodoForUser(AppUser user, Long id, Todo updateTodo) {
+        Todo todo = getTodoByIdForUser(user, id);
 
         todo.setTitle(updateTodo.getTitle());
         todo.setStatus(updateTodo.isStatus());
@@ -59,13 +66,24 @@ public class TodoService {
         return todoRepository.save(todo);
     }
 
-    public Todo updateTodoByTitle(String title, Todo updateTodo) {
-        Todo todo = todoRepository.findByTitle(title)
-                .orElseThrow(() -> new RuntimeException("Task not found"));
+    public Todo updateTodoByTitleForUser(AppUser user, String title, Todo updateTodo) {
+        Todo todo = getTodoByTitleForUser(user, title);
 
         todo.setTitle(updateTodo.getTitle());
         todo.setStatus(updateTodo.isStatus());
 
         return todoRepository.save(todo);
+    }
+
+    public long countTotalForUser(AppUser user) {
+        return todoRepository.countByOwnerId(user.getId());
+    }
+
+    public long countCompletedForUser(AppUser user) {
+        return todoRepository.countByOwnerIdAndStatus(user.getId(), true);
+    }
+
+    public List<Todo> getAllTodosForAdmin() {
+        return todoRepository.findAll();
     }
 }
