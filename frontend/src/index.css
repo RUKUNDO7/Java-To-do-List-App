@@ -39,6 +39,72 @@ body {
   gap: 28px;
 }
 
+.auth-wrap {
+  display: grid;
+  place-items: center;
+  min-height: 80vh;
+}
+
+.auth-panel {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 16px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 12px;
+}
+
+.password-meter {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 14, 22, 0.7);
+}
+
+.password-meter__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.password-meter__head strong {
+  color: var(--text);
+}
+
+.password-meter__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.password-meter__bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ff8ba0, #f4da73, #8affd1);
+  transition: width 0.2s ease;
+}
+
+.password-rules {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.password-rules .is-met {
+  color: var(--accent-2);
+}
+
 .hero {
   padding: 36px;
   border-radius: 26px;
@@ -252,6 +318,13 @@ button {
 button:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .solid {
