@@ -1,5 +1,6 @@
 package com.todo.todo.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -16,4 +17,9 @@ public class Todo {
     private String title;
 
     private boolean status;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    @JsonIgnore
+    private AppUser owner;
 }
