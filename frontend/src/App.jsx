@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "./api.js";
 
-const emptyLookup = { id: "", title: "" };
-
 const statusLabel = (value) => (value ? "Done" : "Open");
 
 const StatusPill = ({ value }) => (
@@ -11,14 +9,48 @@ const StatusPill = ({ value }) => (
   </span>
 );
 
+const initialAuthForm = {
+  username: "",
+  email: "",
+  password: "",
+};
+
+const evaluatePassword = (password) => {
+  const checks = [
+    { key: "length", label: "At least 12 characters", met: password.length >= 12 },
+    { key: "upper", label: "One uppercase letter", met: /[A-Z]/.test(password) },
+    { key: "lower", label: "One lowercase letter", met: /[a-z]/.test(password) },
+    { key: "number", label: "One number", met: /[0-9]/.test(password) },
+    { key: "special", label: "One special character", met: /[^A-Za-z0-9]/.test(password) },
+    { key: "space", label: "No spaces", met: !/\s/.test(password) },
+  ];
+  const score = checks.filter((check) => check.met).length;
+  const progress = Math.round((score / checks.length) * 100);
+  const label = score <= 2 ? "Weak" : score <= 4 ? "Medium" : score < 6 ? "Almost strong" : "Strong";
+
+  return {
+    checks,
+    score,
+    progress,
+    label,
+    isStrong: score === checks.length,
+  };
+};
+
 export default function App() {
   const [tasks, setTasks] = useState([]);
   const [status, setStatus] = useState("Ready.");
-  const [lookup, setLookup] = useState(emptyLookup);
+  const [lookupTitle, setLookupTitle] = useState("");
   const [lookupResult, setLookupResult] = useState("");
   const [lookupHasSearched, setLookupHasSearched] = useState(false);
   const [filter, setFilter] = useState("all");
   const [createTitle, setCreateTitle] = useState("");
+  const [user, setUser] = useState(null);
+  const [dashboard, setDashboard] = useState(null);
+  const [authMode, setAuthMode] = useState("login");
+  const [authForm, setAuthForm] = useState(initialAuthForm);
+  const [authError, setAuthError] = useState("");
+  const [loadingSession, setLoadingSession] = useState(true);
 
   const stats = useMemo(() => {
     const done = tasks.filter((task) => task.status).length;
@@ -27,6 +59,25 @@ export default function App() {
   }, [tasks]);
 
   const filteredTasks = useMemo(() => tasks, [tasks]);
+  const passwordStrength = useMemo(
+    () => evaluatePassword(authForm.password),
+    [authForm.password]
+  );
+  const signupDisabled = authMode === "signup" && !passwordStrength.isStrong;
+
+  const clearAppState = () => {
+    setTasks([]);
+    setDashboard(null);
+    setLookupResult("");
+    setLookupHasSearched(false);
+    setCreateTitle("");
+    setLookupTitle("");
+  };
+
+  const loadDashboard = async () => {
+    const data = await api.dashboard();
+    setDashboard(data);
+  };
 
   const loadByFilter = async (nextFilter) => {
     setStatus("Loading tasks...");
@@ -38,29 +89,54 @@ export default function App() {
         setStatus(`Loaded ${data.length} task(s).`);
         return;
       }
-      const statusValue = nextFilter === "done";
-      const data = await api.byStatus(statusValue);
+      const data = await api.byStatus(nextFilter === "done");
       setTasks(data);
       setStatus(`Loaded ${data.length} task(s).`);
     } catch (error) {
+      if (error.status === 401) {
+        setUser(null);
+        clearAppState();
+      }
       setStatus(`Error: ${error.message}`);
     }
   };
 
-  const handleLookup = async (mode) => {
+  const hydrateForUser = async (nextUser) => {
+    setUser(nextUser);
+    setStatus("Loading your dashboard...");
+    await Promise.all([loadDashboard(), loadByFilter("all")]);
+  };
+
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        const me = await api.me();
+        await hydrateForUser(me);
+      } catch {
+        setUser(null);
+      } finally {
+        setLoadingSession(false);
+      }
+    };
+
+    initSession();
+  }, []);
+
+  const handleLookup = async () => {
+    if (!lookupTitle.trim()) {
+      return;
+    }
+
     setStatus("Fetching task...");
     setLookupHasSearched(true);
     try {
-      const data =
-        mode === "id" ? await api.byId(lookup.id) : await api.byTitle(lookup.title);
+      const data = await api.byTitle(lookupTitle.trim());
       const inFilter =
         filter === "all" ||
         (filter === "done" && data.status) ||
         (filter === "open" && !data.status);
       const filterNote = inFilter ? "" : " (not in current filter)";
-      setLookupResult(
-        `Found: ${data.title} (${statusLabel(data.status)})${filterNote}`
-      );
+      setLookupResult(`Found: ${data.title} (${statusLabel(data.status)})${filterNote}`);
       setStatus("Lookup complete.");
     } catch (error) {
       if (error.status === 404) {
@@ -79,7 +155,7 @@ export default function App() {
         title: task.title,
         status: !task.status,
       });
-      await loadByFilter(filter);
+      await Promise.all([loadByFilter(filter), loadDashboard()]);
       setStatus("Task updated.");
     } catch (error) {
       setStatus(`Error: ${error.message}`);
@@ -91,25 +167,141 @@ export default function App() {
     await loadByFilter(nextFilter);
   };
 
-  useEffect(() => {
-    loadByFilter("all");
-  }, []);
-
   const handleCreate = async (event) => {
     event.preventDefault();
     if (!createTitle.trim()) {
       return;
     }
+
     setStatus("Creating task...");
     try {
       await api.create({ title: createTitle.trim(), status: false });
       setCreateTitle("");
-      await loadByFilter(filter);
+      await Promise.all([loadByFilter(filter), loadDashboard()]);
       setStatus("Task created.");
     } catch (error) {
       setStatus(`Error: ${error.message}`);
     }
   };
+
+  const handleAuthSubmit = async (event) => {
+    event.preventDefault();
+    setAuthError("");
+    if (authMode === "signup" && !passwordStrength.isStrong) {
+      setAuthError("Use a stronger password to continue.");
+      return;
+    }
+    try {
+      const authUser =
+        authMode === "signup"
+          ? await api.signup(authForm)
+          : await api.login({ username: authForm.username, password: authForm.password });
+      setAuthForm(initialAuthForm);
+      await hydrateForUser(authUser);
+      setLoadingSession(false);
+    } catch (error) {
+      setAuthError(error.message || "Authentication failed");
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } finally {
+      setUser(null);
+      clearAppState();
+      setStatus("Signed out.");
+    }
+  };
+
+  if (loadingSession) {
+    return <div className="panel">Loading session...</div>;
+  }
+
+  if (!user) {
+    return (
+      <div className="auth-wrap">
+        <section className="panel auth-panel">
+          <p className="hero__eyebrow">Account</p>
+          <h1>{authMode === "login" ? "Log in" : "Create account"}</h1>
+          <p className="panel__subtitle">{authMode === "login" ? "Welcome back." : "Start your personalized to-do dashboard."}</p>
+
+          <form className="auth-form" onSubmit={handleAuthSubmit}>
+            <input
+              value={authForm.username}
+              onChange={(event) =>
+                setAuthForm((prev) => ({ ...prev, username: event.target.value }))
+              }
+              placeholder="Username"
+              required
+            />
+            {authMode === "signup" ? (
+              <input
+                type="email"
+                value={authForm.email}
+                onChange={(event) =>
+                  setAuthForm((prev) => ({ ...prev, email: event.target.value }))
+                }
+                placeholder="Email"
+                required
+              />
+            ) : null}
+            <input
+              type="password"
+              value={authForm.password}
+              onChange={(event) =>
+                setAuthForm((prev) => ({ ...prev, password: event.target.value }))
+              }
+              placeholder="Password"
+              required
+            />
+            {authMode === "signup" ? (
+              <div className="password-meter">
+                <div className="password-meter__head">
+                  <span>Password strength</span>
+                  <strong>{passwordStrength.label}</strong>
+                </div>
+                <div
+                  className="password-meter__bar"
+                  role="progressbar"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow={passwordStrength.progress}
+                >
+                  <span style={{ width: `${passwordStrength.progress}%` }} />
+                </div>
+                <ul className="password-rules">
+                  {passwordStrength.checks.map((check) => (
+                    <li
+                      key={check.key}
+                      className={check.met ? "is-met" : ""}
+                    >
+                      {check.label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {authError ? <div className="callout">{authError}</div> : null}
+            <button className="solid" type="submit" disabled={signupDisabled}>
+              {authMode === "login" ? "Log in" : "Sign up"}
+            </button>
+          </form>
+
+          <button
+            className="ghost"
+            type="button"
+            onClick={() => {
+              setAuthError("");
+              setAuthMode((prev) => (prev === "login" ? "signup" : "login"));
+            }}
+          >
+            {authMode === "login" ? "Need an account? Sign up" : "Already have an account? Log in"}
+          </button>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -117,10 +309,14 @@ export default function App() {
         <div className="hero__top">
           <div>
             <p className="hero__eyebrow">Task Console</p>
-            <h1>To-do Board</h1>
-            <p className="hero__subtitle">
-              A focused workspace for reviewing and completing tasks.
-            </p>
+            <h1>{dashboard?.username || user.username}&apos;s Dashboard</h1>
+            <p className="hero__subtitle">Authenticated workspace with account-based task isolation.</p>
+            <p className="panel__subtitle">Role: {dashboard?.role || user.role}</p>
+          </div>
+          <div className="hero__actions">
+            <button className="ghost" type="button" onClick={handleLogout}>
+              Log out
+            </button>
           </div>
         </div>
         <div className="hero__actions">
@@ -153,15 +349,15 @@ export default function App() {
         <div className="overview__list">
           <div className="overview__item">
             <span>Total tasks</span>
-            <strong>{tasks.length}</strong>
+            <strong>{dashboard?.totalTasks ?? tasks.length}</strong>
           </div>
           <div className="overview__item">
             <span>Open</span>
-            <strong>{stats.open}</strong>
+            <strong>{dashboard?.openTasks ?? stats.open}</strong>
           </div>
           <div className="overview__item">
             <span>Completed</span>
-            <strong>{stats.done}</strong>
+            <strong>{dashboard?.completedTasks ?? stats.done}</strong>
           </div>
         </div>
       </section>
@@ -220,7 +416,7 @@ export default function App() {
           className="search"
           onSubmit={(event) => {
             event.preventDefault();
-            handleLookup("title");
+            handleLookup();
           }}
         >
           <div className="search__field">
@@ -233,10 +429,8 @@ export default function App() {
               </svg>
             </span>
             <input
-              value={lookup.title}
-              onChange={(event) =>
-                setLookup((prev) => ({ ...prev, title: event.target.value }))
-              }
+              value={lookupTitle}
+              onChange={(event) => setLookupTitle(event.target.value)}
               placeholder="Search task by exact title"
               aria-label="Search tasks by title"
             />
